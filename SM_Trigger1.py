@@ -21,6 +21,25 @@ dynamodb = boto3.resource('dynamodb', region_name='us-west-2')
 table = dynamodb.Table('DEV-INTERESTS')
 primary_key = 'pk'
 
+class predefinedFunctions:
+
+	def __init__(self):
+		self.scaler = MinMaxScaler(feature_range=(0.1, 1))
+
+	def normalize(self, df):
+		return self.scaler.fit_transform(df)
+
+
+	def groupbySum(self, df, col):
+		df = df.groupby(by = col).sum()
+		df.reset_index(inplace=True)
+		df.columns = ['entityName', 'lookup_freq']
+
+		lookup_dict = dict(zip(df['entityName'], df['lookup_freq']))
+		return lookup_dict
+	def sigmoid(self, x):
+		return 1/(1 + math.exp(-x))
+
 class Prefetch:
 	def __init__(self):
 		self.nlp = spacy.load("en_core_web_sm")
@@ -39,7 +58,8 @@ class Prefetch:
 		self.file_name = sys.argv[1]
 		self.user_json_file = sys.argv[2]
 		self.output_df_file = sys.argv[3]
-		
+		self.functions = predefinedFunctions()
+
 
 	def  create_versioned(self, name):
 		return [
@@ -49,11 +69,58 @@ class Prefetch:
 		]
 
 	def __create_topic_patterns(self):
-	    # versioned_languages = ['FPGA']
-	    # flatten = lambda l: [item for sublist in l for item in sublist]
-	    # versioned_patterns = flatten([self.create_versioned(lang) for lang in versioned_languages])
 
-	    topic_patterns = []
+	    topic_patterns = [
+	        [{'LOWER': 'edge'}, {"LOWER": "iq", 'op': '+'}],
+	        [{'LOWER': {"IN": ['edgeiq', 'edge iq']}}],
+	        # [{'LOWER': 'edgeiq'}],
+	        [{'LOWER': 'watchguard'}],
+	        [{'LOWER': 'sdk'}],
+	        
+	        # [{'LOWER': 'cyberattack'}],
+	        [{'LOWER': 'cyber'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'attack'}],
+	        [{'LOWER': {"IN": ['cyber attack', 'cyberattack']}}],
+	        [{'LOWER': 'iiot'}],
+	        
+	        [{'LOWER': 'secure'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'ai'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "engine"}],
+	        [{'LOWER': 'sve'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'secure'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'vault'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "extension"}],
+	        
+	        [{'LOWER': 'secure'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'vault'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "extension"}],
+	        [{'LOWER': 'sae'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'secure'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'ai'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "engine"}],
+	        
+	        # [{"LOWER": "rocketchip"}],
+	        [{'LOWER': 'rocket'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "chip"}],
+	        [{'LOWER': {"IN": ['rocket chip', 'rocketchip']}}],
+	        [{'LOWER': 'cloud'}],
+	        
+	        [{"LOWER": "soc"}],
+	        [{"LOWER": 'system'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "on"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'chip'}],
+	        [{'LOWER': 'soc'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": 'system'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "on"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'chip'}],
+	        [{"LOWER": "rtl"}],
+	        
+	        [{'LOWER': 'zap'}],
+	        [{'LOWER': 'full'}, {"IS_PUNCT":True}, {"LOWER": "stack"}, {"IS_PUNCT":True}, {"LOWER": "zap"}],
+	        [{'LOWER': 'fullstack'}, {"LOWER": "zap"}],
+	        
+	        [{"LOWER": "asic"}],
+	        [{"LOWER": "asic"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'application'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'specific'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "integrated"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "circuit"}],
+	        [{'LOWER': 'application'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'specific'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "integrated"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "circuit"}],
+	        [{"LOWER": "silicon"}],
+	        [{"LOWER": "gds"}],
+	        [{"LOWER": 'graphic'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "data"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'stream'}],
+	        [{'LOWER': 'gds'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": 'graphic'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "data"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'stream'}],
+	        [{"LOWER": "asic"}],
+	        [{"LOWER": 'register'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "transfer"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'level'}],
+	        [{'LOWER': 'rtl'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": 'register'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "transfer"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'level'}],
+	        
+	        [{"LOWER": "securevault"}],
+	        [{'LOWER': 'svt'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "securevault"}],
+	        
+	        [{'LOWER': 'secure'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'vault'}],
+	        [{'LOWER': 'svt'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'secure'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'vault'}],
+	        
+	        
+	    ]
 	    return topic_patterns
 
 	def __create_os_patterns(self):
@@ -232,32 +299,269 @@ class Prefetch:
 
 
 	def __create_components(self):
-	    versioned_languages = []
+	    versioned_languages = ['CPX-CPU', 'DIS', 'DMA', 'DRC', 'FNN', 'GPU', 'MCE', 'MRD', 'DIA', 'HCP', 'LSP', 'MIS', 'MMU', 'NOC', 'OSB', 'PCIe', 'USB', 'TOP']
 	    flatten = lambda l: [item for sublist in l for item in sublist]
 	    versioned_patterns = flatten([self.create_versioned(lang) for lang in versioned_languages])
-	    component_patterns = []
+	    component_patterns = [
+	        [{'LOWER': 'cpx'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'cpu'}],
+	        [{'LOWER': 'cpx'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'cpu'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'complex'}],
+	        [{'LOWER': 'cpx-cpu'}],
+	        [{'LOWER': 'dma'}],
+	        [{'LOWER': {'IN': ['mis-miscellaneous', 'mis miscellaneous']}}],
+	        [{'LOWER': 'drc'}],
+	        [{'LOWER': 'fnn'}],
+	        [{'LOWER': 'gpu'}],
+	        [{'LOWER': 'hcp'}],
+	        [{'LOWER': 'lsp'}],
+	        [{'LOWER': 'mis'}],
+	        [{'LOWER': 'mmu'}],
+	        [{'LOWER': 'mce'}],
+	        [{'LOWER': 'noc'}],
+	        [{'LOWER': 'osb'}],
+	        [{'LOWER': 'mrd'}],
+	        [{'LOWER': 'pcie'}],
+	        [{'LOWER': 'usb'}],
+	        [{'LOWER': 'inference'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'engine'}],
+	        [{'LOWER': 'firewall'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'engine'}],
+	        [{'LOWER': 'memory'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'controller'}],
+	        [{'LOWER': 'dia'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'planning'}],
+	        
+	        [{'LOWER': 'display'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'controller'}],
+	        [{'LOWER': 'dis'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'display'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'controller'}],
+	    
+	        [{"LOWER": 'memory'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "crypto"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'engine'}],
+	        [{'LOWER': 'mce', 'OP': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": 'memory'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "crypto"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'engine'}],
+	        
+	        [{"LOWER": 'direct'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "memory"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'access'}],
+	        [{'LOWER': 'dma'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": 'direct'}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": "memory"}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'access'}],
+	        [{'LOWER': 'dram'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'controller'}],
+	        [{'LOWER': 'drc'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'dram'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'controller'}],
+	        [{'LOWER': 'graphics'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'processing'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "unit"}],
+	        [{'LOWER': 'gpu'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'graphics'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'processing'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "unit"}],
+	        [{'LOWER': 'low'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'speed'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "peripheral"}],
+	        [{'LOWER': 'lsp'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'low'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'speed'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "peripheral"}],
+	        [{'LOWER': 'neural'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'network'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "processor"}],
+	        [{'LOWER': 'fnn'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'neural'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'network'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "processor"}],
+	        [{'LOWER': 'memory'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'management'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "unit"}],
+	        [{'LOWER': 'mmu'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'memory'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'management'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "unit"}],
+	        
+	        [{'LOWER': 'network'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'on'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "chip"}],
+	        [{'LOWER': 'noc'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'network'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'on'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "chip"}],
+	        
+	        [{'LOWER': 'on'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'chip'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "staging"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "buffer"}],
+	        [{'LOWER': 'osb'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'on'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'chip'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "staging"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "buffer"}],
+	        
+	        [{'LOWER': 'header'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "crypto"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "processor"}],
+	        [{'LOWER': 'hcp'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'header'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and', 'OP': '?'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "crypto"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "processor"}],
+	        
+	        [{'LOWER': 'firewall', 'OP': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "neural"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "network"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "processor"}],
+	        [{'LOWER': 'fnn', 'OP': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'firewall', 'OP': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and', 'OP': '?'}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "neural"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "network"}, {"IS_PUNCT": True, "OP": '?'}, {"LOWER": "processor"}]]
 	    
 	    return component_patterns
 
 	def __create_team_patterns(self):
-		    versioned_languages = []
+		    versioned_languages = ['CNN Team', 'Crypto Team Discussions', 'Communication Team', 'All hands', 'FPGA', 'Products & Marketing', 'Kirkwood Architecture', 'Gopi & Marketing', 'Corp Leaders', 'Immigration_SSR', 'Product Documentation', 'NonImmig_closedGrp', 'Tantra Analyst', 'Kirkwood Design', 'Axiado Library', 'Kirkwood FPGA', 
+		                           'Design Verification', 'Axiado Exec Team', 'MAC TEAM', 'SVlabs', 'MAC and USB Team', 'AxCan', 'Kirkwood Product Lifecycle', 'sw-engineering', 'Ethernet Sub-System', 'DIA Women', 'Kirkwood SOC Build Up', 'STEM/H1B', 'Pathfinders', 'EdgeIQ-Board-and-Package-Design', 'CoreAndPeripherals','EdgeIQ Testing and Simulations', 
+		                          'EdgeIQ Clock Interactions']
 		    flatten = lambda l: [item for sublist in l for item in sublist]
 		    versioned_patterns = flatten([self.create_versioned(lang) for lang in versioned_languages])
 
-		    topic_patterns = []
+		    topic_patterns = [
+		        [{'LOWER': 'cnn'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team'}],
+		        [{'LOWER': 'crypto'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team'}],
+		        [{'LOWER': 'communication'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'discussion', 'OP': '?'}],
+		        [{'LOWER': 'axiado'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'exec'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team', 'OP': '?'}],
+		        [{'LOWER': 'mac'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team'}],
+		        [{'LOWER': 'mac'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and', 'OP': '?'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'usb'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team', 'OP': '?'}],
+		        [{'LOWER': 'kirkwood'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'product'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'lifecycle'}],
+		        [{'LOWER': 'ethernet'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'sub'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'system'}],
+		        [{'LOWER': 'ethernet'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'subsystem'}],
+
+		        [{'LOWER': 'kirkwood'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'soc'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'build'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'up', 'OP': '?'}],
+		        [{'LOWER': 'dia'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'women'}],
+		        [{'LOWER': 'sw'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'engineering'}],
+		        [{'LOWER': 'all'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'hands'}],
+		        [{'LOWER': 'fpga'}],
+		        [{'LOWER': 'axcan'}],
+		        [{'LOWER': 'coreandperipherals'}],
+		        [{'LOWER': 'core'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and', 'OP': '?'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'peripherals'}],
+		        [{'LOWER': 'dia'}],
+		        [{'LOWER': 'pathfinders'}],
+		        [{'LOWER': 'edgeiq clock interactions'}],
+		        [{'LOWER': 'edgeiq testing and simulations'}],
+		        [{'LOWER': 'edgeiq-board-and-package-design'}],
+		        [{'LOWER': 'edgeiq'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'board', 'op': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and', "OP": '?'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'package', 'OP': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'design', 'OP': '+'} ],
+		        [{'LOWER': 'edgeiq'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'testing', 'op': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'and', "OP": '?'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'simulations', 'op': '+'}],
+		        [{'LOWER': 'edgeiq'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'clock', 'op': '+'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'interactions', 'op': '+'}],
+		        [{'LOWER': 'svlabs'}],
+		        [{'TEXT': 'stem/h1b'}],
+		        [{'LOWER': 'sv'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'labs'}],
+		        [{'LOWER': 'stem'}, {"IS_PUNCT": True, 'OP': '?'}, {'TEXT': 'h1b'}],
+		        [{'LOWER': 'path'}, {"IS_PUNCT": True, 'OP': '?'}, {'TEXT': 'finders'}],
+		        
+		        [{'TEXT': 'gopi & marketing'}],
+		        [{'LOWER': 'corp'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'leaders', 'op': '+'}],
+		        [{'LOWER': 'kirkwood'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'architecture', 'op': '+'}],
+		        [{'LOWER': 'immigration'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'ssr', 'op': '+'}],
+		        [{'LOWER': 'product'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'documentation', 'op': '+'}],
+		        [{'LOWER': 'nonimmig'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'closedgrp', 'op': '+'}],
+		        [{'LOWER': 'tantra'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'analyst', 'op': '+'}],
+		        [{'LOWER': 'kirkwood'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'design', 'op': '+'}],
+		        [{'LOWER': 'kirkwood'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'fpga', 'op': '+'}],
+		        [{'LOWER': 'communication'}, {"IS_PUNCT": True, 'OP': '?'}, {'LOWER': 'team', 'op': '+'}],
+		        [{'TEXT': 'axiado'}, {"IS_PUNCT": True, 'OP': '?'}, {'TEXT': 'Library', 'op': '+'}],
+	        
+
+		        
+		    ]
 		    return topic_patterns
 	
 	def __create_people_patterns_full(self):
-	    topic_patterns = []
+	    topic_patterns = [
+	            [{"LOWER": 'akshat'}, {"LOWER": "karnwal", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['akshat karnwal', 'karnwal']}}],
+	            [{"LOWER": 'vamshi'}, {"LOWER": "mahendrakar", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['vamshi mahendrakar', 'vamshi', 'mahendrakar']}}],
+	        
+	            [{"LOWER": 'sean'}, {"LOWER": "campeau", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['sean  campeau', 'sean', 'campeau']}}],
+	            
+	            [{"LOWER": 'john'}, {"LOWER": "carr", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['john carr', 'carr', 'john']}}],
+	        
+	            [{"LOWER": 'shteryana'}],
+	        
+	            [{"LOWER": 'kristof'}, {"LOWER": "provost", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['kristof provost', 'kristof', 'provost']}}],
+	        
+	            [{"LOWER": 'rishelle'}, {"LOWER": "zertuche", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['rishelle zertuche', 'rishelle', 'zertuche']}}],
+	        
+	            [{"LOWER": 'parnitha'}, {"LOWER": "badre", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['parinita badre', 'parnitha', 'badre']}}],
+	        
+	            [{"LOWER": 'neharika'}, {"LOWER": "yadav", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['neharika', 'yadav']}}],
+	        
+	            [{"LOWER": 'sayali'}, {"LOWER": "naik", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['sayali naik', 'sayali']}}],
+	        
+	            [{"LOWER": 'nick'}, {"LOWER": "obrien", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['nick obrien', 'nick', 'obrien']}}],
+	        
+	            [{"LOWER": 'gibran'}, {"LOWER": "khan", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['gibran', 'khan']}}],
+	        
+	            [{"LOWER": 'prasanna'}, {"LOWER": "sane", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['prasanna sane', 'prasanna', 'sane']}}],
+	        
+	            [{"LOWER": 'naga'}, {"LOWER": "maddala", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['naga maddala', 'naga', 'maddala']}}],
+	        
+	            [{"LOWER": 'tom'}, {"LOWER": "farmer", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['tom farmer', 'tom', 'farmer']}}],
+	        
+	            [{"LOWER": 'akhhiila'}, {"LOWER": "gurram", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['akhhiila gurram', 'akhhiila', 'gurram']}}],
+	        
+	            [{"LOWER": 'syam'}, {"LOWER": "sunder", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['syam sunder', 'syam', 'sunder']}}],
+	        
+	            [{"LOWER": 'dianne'}, {"LOWER": "hilly", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['dianne hilly', 'dianne', 'hilly']}}],
+	        
+	            [{"LOWER": 'divya'}, {"LOWER": "ravindran", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['divya ravindran', 'divya', 'ravindran']}}],
+	        
+	            [{"LOWER": 'alfredo'}, {"LOWER": "herrera", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['alfredo herrera', 'alfredo', 'herrera']}}],
+	        
+	            [{"LOWER": 'madhavendra'}, {"LOWER": "bhatnagar", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['madhavendra bhatnagar', 'madhavendra', 'bhatnagar']}}],
+	        
+	            [{"LOWER": 'esteban'}, {"LOWER": "figueroa", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['esteban figueroa', 'figueroa', 'esteban']}}],
+	            [{"LOWER": 'monaco user'}],
+	            [{'LOWER': 'shteryana'}],
+
+	            [{"LOWER": 'vaidehi'},  {"LOWER": "np", 'OP': '?'}],
+	            [{'LOWER': 'vaidehi'}],
+
+	            [{'LOWER': {"IN": ['dubai user']}}],
+	            [{'LOWER': 'pranav'}],
+	            [{'LOWER': "vaidehi"}, {"IS_PUNCT": True, 'OP': '?'}, {"LOWER": 'np', 'OP': '?'}],
+	            [{'LOWER': {"IN": ['ramiel silva', 'ramiel']}}],
+	            [{"LOWER": 'ramiel'},  {"LOWER": "silva", 'OP': '?'}],
+	            [{"LOWER": 'rishul'},  {"LOWER": "naik", 'OP': '?'}],
+	            [{"LOWER": 'amit'}, {"LOWER": "patel", 'OP': '?'}],
+	            [{'LOWER': 'psangam'}],
+
+
+	            [{"LOWER": 'deepansh'}, {"LOWER": "agrawal", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['deepansh agrawal', 'agrawal', 'deepansh']}}],
+
+	            [{"LOWER": 'phil'}, {"LOWER": "bujold", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['phil', 'bujold']}}],
+
+
+	            [{'LOWER': {"IN": ['olympia bakalis', 'bakalis']}}],
+
+	            [{"LOWER": 'prasanna'}, {"LOWER": "reddy", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['prasanna reddy']}}],
+
+	            [{"LOWER": 'shreyas'}, {"LOWER": "shah", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['shreyas shah']}}],
+
+	            [{"LOWER": 'shiddlingappa'}, {"LOWER": "gadad", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['shiddlingappa gadad', 'gadad']}}],
+
+	            [{'LOWER': 'fahad'}],
+
+	            [{"LOWER": 'tirumala'},{"LOWER": "marri", 'OP': '?'}],
+	            [{"LOWER": 'sindhuja'},  {"LOWER": "yadiki", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['sindhuja yadiki', 'yadiki']}}],
+
+	            [{"LOWER": 'aditya'},  {"LOWER": "venkatraman", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['aditya venkatraman', 'venkatraman']}}],
+	            [{'LOWER': 'ksrao'}],
+	            [{'LOWER': 'mrudhvika'}],
+
+	            [{"LOWER": 'monaco'},  {"LOWER": "conference", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['monaco conference room']}}],
+
+	            [{"LOWER": 'mike'}, {"LOWER": "lieberenz", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['mike lieberenz', 'lieberenz']}}],
+
+	            [{"LOWER": 'mahesh'},  {"LOWER": "mogilisetty", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['mahesh mogilisetty', 'mogilisetty']}}],
+
+	            [{"LOWER": 'gopi', 'OP': '+'},  {"LOWER": "sirineni", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['gopi sirineni', 'sirineni']}}],
+
+	            [{"LOWER": 'sam'},  {"LOWER": "sandbote", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['sam sandbote', 'sandbote']}}],
+
+	            [{"LOWER": 'philip'},  {"LOWER": "kearney", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['philip kearney', 'kearney']}}],
+
+	            [{"LOWER": 'tejas'},  {"LOWER": "karelia", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['tejas karelia', 'karelia']}}],
+
+	            [{"LOWER": 'yash'},  {"LOWER": "patel", 'OP': '?'}],
+	            [{"LOWER": 'kumar'}, {"LOWER": "bhattaram", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['kumar bhattaram', 'bhattaram']}}],
+
+	            [{"LOWER": 'chris'}, {"LOWER": "scott", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['chris scott', 'scott']}}],
+
+	            [{"LOWER": 'patrick'},  {"LOWER": "okeeffe", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['patrick okeeffe', 'okeeffe']}}],
+
+
+	        ]
 
 
 	    return topic_patterns
-
-	# def __create_email_patterns(self):
-	# 	email_flag = lambda text: bool(re.compile(r'^[^@]+@[^@]+.[^@]+$'))
-	# 	IS_MY_EMAIL = self.nlp.vocab.add_flag(email_flag)
-	# 	return IS_MY_EMAIL
-
 
 
 	def inistiatePatterns(self):
@@ -275,8 +579,6 @@ class Prefetch:
 		self.__matcher.add("COMPONENTS", self.__components)
 		self.__matcher.add("OS", self.__os)
 		self.__matcher.add("CLOUD_PLATFORMS", self.__cloud)
-		# IS_MY_EMAIL = self.__create_email_patterns()
-		# self.__matcher.add('EMAIL', [[{IS_MY_EMAIL: True}]])
 		self.__matcher.add("TEAMS", self.__teams)
 		self.__matcher.add("COMMUNICATION_TECH_PLATFORMS", self.__communication_tech)
 
@@ -290,6 +592,50 @@ class Prefetch:
 
 	def ent_item_extract2(self, df):
 	    return Counter(w for w in df)
+
+	def topic_replace(self, df):
+		topic_map = {
+		    'edgeiq' : 'edge iq',
+		    'register transfer level' :  'rtl',
+		    'svt-secure vault' : 'secure vault',
+		    'securevault' : 'secure vault',
+		    'svt': 'secure vault',
+		    'hcp-header crypto processor' : 'hcp',
+		    'header crypto processor': 'hcp',
+		    'fnn-firewall neural network processor' : 'fnn',
+		    'graphics processing unit' : 'gpu', 
+		    'gpu-graphics processing unit' : 'gpu',
+		    'drc-dram controller' : 'drc',
+		    'dram controller': 'drc',
+		    'mmu-memory management unit' : 'mmu',
+		    'dma-direct memory access' : 'dma',
+		    'direct memory access': 'dma',
+		    'memory crypto engine': 'dma',
+		    'firewall neural network processor': 'fnn',
+		    'memory management unit': 'mmu',
+		    'neural network processor' : 'fnn',
+		    'mce/memory crypto engine' : 'mce',
+		    'dma/direct memory access' : 'dma',
+		    'low speed peripheral' : 'lsp',
+		    'network-on-chip' : 'noc',
+		    'network on chip' : 'noc',
+		    'cyber-attack' : 'cyber attack',
+		    'cyberattack' : 'cyber attack',
+		    'system on chip': 'soc',
+		    'system-on-chip' : 'soc',
+		    'memory crypto engine' : 'mce',
+		    'graphic data stream' : 'gds',
+		    'gds-graphic data  stream' : 'gds',
+		    'application specific integrated circuit' : 'asic'
+		    }
+		names2 = []
+		for i in df:
+		    
+		    if i in topic_map.keys():
+		        names2.append(topic_map[i])
+		    else:
+		        names2.append(i)
+		return names2
 
 	def substringReplace(self, names):
 	    names2 = []
@@ -310,6 +656,8 @@ class Prefetch:
 	    for i in list(d.keys()):
 	        if i == "PEOPLE":
 	            d[i] = self.substringReplace(d[i])
+	        elif i == "TOPICS" or i == "COMPONENTS":
+	        	d[i] = self.topic_replace(d[i])
 	        result[i] = self.ent_item_extract2(d[i])
 	    return result
 
@@ -428,12 +776,9 @@ class Files(Prefetch):
 	def data_wrangler(self, df):
 		wg = []
 		for i in range(len(df)):
-		# df['fromEmailAddress '] = df['fromEmailAddress '].apply(lambda x: eval(x)[0])
-		# df['toRecipients '] = df['toRecipients '].apply(lambda x: eval(x)[0])
 			try:
 				wg.append(df['subject '].loc[i] + ' ' +  df['body.content '].loc[i] + ' ' + df['toRecipients '].loc[i] + ' ' + df['ccRecipients '].loc[i])
 			except Exception as e:
-				# print("error occured in data_wrangler")
 				wg.append(df['subject '].loc[i] + ' ' +  df['body.content '].loc[i] + ' ' + ' '.join(df['toRecipients '].loc[i]) + ' ' + ' '.join(df['ccRecipients '].loc[i]))
 		return wg
 
@@ -451,7 +796,6 @@ class Files(Prefetch):
 		with open(file_name, 'r') as f:
 			data = json.loads(f.read())
 		f.close()
-		# print("read json file: ", file_name)
 		return data
 	  
 	def __write_to_json(self, file_name, data):
@@ -459,7 +803,6 @@ class Files(Prefetch):
 			# f.write(json.dumps(data))
 			json.dump(data, f, indent = 4)
 		f.close()
-		# print("Written to json file: ", file_name)
 	def user_interest(self, id_):
 	    self.__user_df = self.__interest_df[(self.__interest_df['fromEmailAddress '] == id_) | (self.__interest_df['toRecipients '].str.contains(id_)) | (self.__interest_df['ccRecipients '].str.contains(id_))]
 	    user_content = list(self.__user_df['entities'])
@@ -616,19 +959,14 @@ class Files(Prefetch):
 				return None
     
 
-	def get_param(self):
+	def get_param(self, file_id):
 		self.__res = self.jsonl_to_dict(self.__result[0])
 		self.__df = pd.DataFrame.from_dict(self.__res)
-
 
 		self.__df_copy = self.__df.copy()
 		self.__df_copy['body.content '] = self.__df_copy['body.content '].str.lower()
 
 		self.__df_copy['body.content '] = self.__df_copy['body.content '].apply(self.email_clean)
-
-		# print(self.__df_copy.columns)
-		# print(self.__df_copy.head())
-
 
 		self.__toAddresses_unique = list(set(sum(list(self.__df['toRecipients ']), [])))
 
@@ -642,7 +980,9 @@ class Files(Prefetch):
 
 		self.__interest_df['content'] = self.__interest_df['content'].apply(self.cleanhtml)
 
-		self.__interest_df['entities'] = self.__interest_df['content'].apply(self.parse_entities)
+
+		self.__interest_df['entities'] = [self.parse_entities(w) for w in self.nlp.pipe(self.__interest_df['content'])]		
+
 
 		self.__interest_df['mails_ext'] = self.__interest_df['content'].apply(self.find_mails)
 		self.__interest_df['mails_ext'] = self.__interest_df['mails_ext'].apply(self.summer)
@@ -654,18 +994,14 @@ class Files(Prefetch):
 		self.__interest_df['ccRecipients '] = self.__interest_df['ccRecipients '].apply(self.remove_tail_spaces)
 		self.__output_df = self.__interest_df.to_dict('records')
 
-		# self.__write_to_json("obj_interset_df.json", self.__output_df)
 		s3_client.put_object(Body=json.dumps(self.__output_df), Bucket = 'augmentor-customer-data', Key = 'sm-matcher-test/idj.json')
-		print("updated idj json file with : ", self.output_df_file)
+
 		self.__lookup_emails = [w for w in self.__emails_ if w.endswith('@axiado.com') or w in self.__ax]
 
 		for i in self.__lookup_emails:
 		    if len(i)>3:
 		        self.user_interest(i)
 
-		# self.__natest = self.__user_interest_dict
-		# self.__write_to_json("obj_user_interest.json", self.__natest)
-		# flag = 0
 		try:
 			print("Opening existing uid.json")
 			obj_ = s3_client.get_object(Bucket='augmentor-customer-data', Key='sm-matcher-test/uid.json')
@@ -675,17 +1011,7 @@ class Files(Prefetch):
 			    sys.exit()
 
 			self.__uid = json.loads(data)
-			# except Exception as file_error:
-			# 	print("Couldn't read file")
-			# 	if file_id == 0:
-			# 		self.__natest = self.__user_interest_dict
-			# 		self.__write_to_json("obj_user_interest.json", self.__natest)
-			# 	else:
-			# 		return
-
-			# if flag == 1:
-
-				# print(self.__uid['amit.patel@axiado.com'])
+			
 			for i in self.__uid:
 				for j in self.__uid[i]:
 					self.__uid[i][j] = Counter(self.__uid[i][j])
@@ -695,11 +1021,7 @@ class Files(Prefetch):
 			for i in self.__user_interest_dict:
 			    if i in self.__uid:
 			        self.__scrap.append(i)
-			print()
-			# print("Found interesect in dict.keys()")
-			# print('===============TRY===============')
-			# print(self.__user_interest_dict['amit.patel@axiado.com'])
-			# print('==================================')
+			
 			for i in self.__scrap:
 			    for j in self.__uid[i]:
 			        if j == "PEOPLE" and j in self.__user_interest_dict[i]:
@@ -719,8 +1041,6 @@ class Files(Prefetch):
 
 		except Exception as e:
 			print('==========EXCEPT===========')
-			# print(self.__user_interest_dict['amit.patel@axiado.com'])
-			# print('==================================')
 
 			self.__natest = self.__user_interest_dict
 			s3_client.put_object(Body=json.dumps(self.__natest), Bucket = 'augmentor-customer-data', Key = 'sm-matcher-test/uid.json')
@@ -739,17 +1059,16 @@ class Files(Prefetch):
 		final_df['value'] = final_df['value'].apply(self.replaces)
 		fna = final_df.copy()
 
-		
-		# au_df_ = pd.read_csv('AUGMENTOR_TRANSIENT2.csv')
+	
 		self.__au_df_ = self.__au_df_[['cognitoSubjectId (S)', 'email (S)', 'displayName (S)']]
-		self.__au_df_.columns = ['sub_id', 'email_id', 'name']
-		self.__au_df_['name'] = self.__au_df_['name'].str.lower()
+		self.__au_df_.columns = ['sub_id', 'email_id', 'userName']
+		self.__au_df_['userName'] = self.__au_df_['userName']
 
 		self.__emails_list = self.email_name_list_(self.__emails_)
 
 		self.__email_to_name_dict = {}
 		for i in range(len(self.__au_df_)):
-		    self.__email_to_name_dict[self.__au_df_['sub_id'].loc[i]] = {"emailId" : self.__au_df_['email_id'].loc[i], "names" : self.__au_df_['name'].loc[i]}
+		    self.__email_to_name_dict[self.__au_df_['sub_id'].loc[i]] = {"emailId" : self.__au_df_['email_id'].loc[i], "names" : self.__au_df_['userName'].loc[i]}
 		    
 
 
@@ -767,7 +1086,7 @@ class Files(Prefetch):
 		fna.loc[fna.category == "PEOPLE", 'alt_avatar'] = self.__sova_avatar
 
 
-		# self.__sova_avatar = fna[fna['category'] == "PEOPLE"]['value'].apply(self.nameToDisplayName)
+		
 		fna.loc[fna.category == "PEOPLE", 'entityLabel'] = "Mention"
 
 		self.__sova_email = fna[fna['category'] == "EMAIL"]['value'].apply(self.mailToId)
@@ -780,6 +1099,7 @@ class Files(Prefetch):
 
 		final_au_int_df = final_df.merge(self.__au_df_, on='email_id', how='left')
 		final_au_int_df['id_type'] = final_au_int_df['sub_id'].apply(self.add_IDType)
+		
 		final_au_int_df['sub_id'].fillna(final_au_int_df['email_id'], inplace=True)
 		final_au_int_df['sub_id'] = final_au_int_df['sub_id'].apply(self.add_USER_tag)
 		final_au_int_df['nameToId'] = fna['alt_value']
@@ -790,10 +1110,33 @@ class Files(Prefetch):
 		final_au_int_df['category'] = final_au_int_df['category'].replace('EMAIL', 'PEOPLE')
 		final_au_int_df['nameToId'] = final_au_int_df['nameToId'].apply(self.add_USER_tag)
 
+		df_cumulative = final_au_int_df.copy()
+		
+		df_cumulative['userName'] = df_cumulative['userName'].apply(lambda x: x.title() if pd.isnull(x)==False else None)
+		df_cumulative = df_cumulative[(df_cumulative['category'] == 'TOPICS') | (df_cumulative['category'] == 'PEOPLE') | (df_cumulative['category'] == 'TEAMS') | (df_cumulative['category'] == 'PROG_SCRIPT_LANG')]
+		frequency_lookup = self.functions.groupbySum(df_cumulative, 'entityName')
+		orphan_lookup = self.functions.groupbySum(df_cumulative, 'nameToId')
+		df_cumulative['self_freq'] = df_cumulative[df_cumulative['category'] == 'PEOPLE']['userName'].apply(lambda x: frequency_lookup[x] if pd.isnull(x)==False else None)
+		df_cumulative['freq_lookup'] = df_cumulative['entityName'].apply(lambda x: frequency_lookup[x])
+		df_cumulative['lookup_freq'] = df_cumulative['entityName'].apply(lambda x: frequency_lookup[x])
+		df_cumulative['self_freq'].fillna(df_cumulative['frequency'], inplace = True)
+		df_cumulative['total_freq'] = df_cumulative['lookup_freq'] + df_cumulative['self_freq'].fillna(0)
+		df_cumulative['total_freq'] = df_cumulative['total_freq'].apply(lambda x: math.sqrt(x))
+		df_cumulative['self_freq'] = df_cumulative['frequency'].apply(lambda x: math.log(x))
+		
+		df_ = df_cumulative.copy()
+	
+		df_[['sc_frequency', 't_frequency']] = self.functions.normalize(df_[['self_freq', 'total_freq']])
+		df_['weight'] = 1.2* df_['sc_frequency'] + df_['t_frequency']
+		df_['weight'] = self.functions.scaler.fit_transform(df_[['weight']])
+		df_['weight'] = df_['weight'].apply(lambda x: round(x, 3))
+
+		df_.drop(columns = ['self_freq', 'lookup_freq', 'total_freq', 'sc_frequency', 't_frequency'], inplace = True)
+		test_interest_json = df_.to_dict('records')
+		s3_client.put_object(Body=json.dumps(test_interest_json), Bucket = 'augmentor-customer-data', Key = 'sm-matcher-test/interestTable.json')
+
 		res_df = final_au_int_df.to_dict('records')
-# 		final_au_int_df.to_csv('obj_fake_eng_df.csv', index=False)
-# 		final_au_int_df.to_json('obj_fake_eng_df.json', orient='records')
-# 		print('Completed writing to csv file')
+
 
 		csv_buf = StringIO()
 		final_au_int_df.to_csv(csv_buf, header=True, index=False)
