@@ -982,7 +982,15 @@ class Files(Prefetch):
 				return ext_name.title()
 			else:
 				return None
-    
+
+	def scaler_function(self, df, flag):
+		min_ = df.min()
+		max_ = df.max()
+		std = (df-min_)/(max_ - min_)
+		if flag == 1:
+			return std
+		else:
+			return std * (1 - 0.1) + 0.1
 
 	def get_param(self, file_id):
 		self.__res = self.jsonl_to_dict(self.__result[0])
@@ -1171,9 +1179,12 @@ class Files(Prefetch):
 		# df_cumulative[['self_normalized', 'total_normalized']] = pfs.normalize(df_cumulative[['frequency', 'total_freq']])
 		df_ = df_cumulative.copy()
 		# df_ = df_[(df_['category'] == 'TOPICS') | (df_['category'] == 'PEOPLE') | (df_['category'] == 'TEAMS') | (df_['category'] == 'PROG_SCRIPT_LANG')]
-		df_[['sc_frequency', 't_frequency']] = self.functions.normalize(df_[['self_freq', 'total_freq']])
+		# df_[['sc_frequency', 't_frequency']] = self.functions.normalize(df_[['self_freq', 'total_freq']])
+		df_['sc_frequency'] = self.scaler_function(df_['self_freq'], 0)
+		df_['t_frequency'] = self.scaler_function(df_['total_freq'], 0)
 		df_['weight'] = 1.2* df_['sc_frequency'] + df_['t_frequency']
-		df_['weight'] = self.functions.scaler.fit_transform(df_[['weight']])
+		# df_['weight'] = self.functions.scaler.fit_transform(df_[['weight']])
+		df_['weight'] = self.scaler_function(df_[['weight']], 1)
 		df_['weight'] = df_['weight'].apply(lambda x: round(x, 3))
 		# print(df_['sc_frequency'].head())
 		# print("=========================")
