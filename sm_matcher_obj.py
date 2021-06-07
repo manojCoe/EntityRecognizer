@@ -4,8 +4,12 @@ import numpy as np
 from spacy import displacy
 from spacy.matcher import Matcher, PhraseMatcher
 from sklearn.preprocessing import MinMaxScaler
+from datetime import datetime
+import dateutil.parser as parser
+from dateutil.relativedelta import relativedelta
 # from scaler_function import predefinedFunctions
 # import scaler_function
+import copy
 import json
 import os
 import io
@@ -30,10 +34,14 @@ class predefinedFunctions:
 	def groupbySum(self, df, col):
 		df = df.groupby(by = col).sum()
 		df.reset_index(inplace=True)
-		df.columns = ['entityName', 'lookup_freq']
-
+		try:
+			df.columns = ['entityName', 'lookup_freq', 'lookup_decay_frequency']
+		except Exception as e:
+			print(df.columns)
+			sys.exit()
 		lookup_dict = dict(zip(df['entityName'], df['lookup_freq']))
-		return lookup_dict
+		lookup_decay_dict = dict(zip(df['entityName'], df['lookup_decay_frequency']))
+		return lookup_dict, lookup_decay_dict
 	def sigmoid(self, x):
 		return 1/(1 + math.exp(-x))
 
@@ -55,7 +63,6 @@ class Prefetch:
 		self.__communication_tech = None
 		self.__emails_ = None
 		self.functions = predefinedFunctions()
-
 
 
 	def  create_versioned(self, name):
@@ -477,6 +484,8 @@ class Prefetch:
 	        
 	            [{"LOWER": 'dianne'}, {"LOWER": "hilly", 'OP': '?'}],
 	            [{'LOWER': {"IN": ['dianne hilly', 'dianne', 'hilly']}}],
+	            [{"LOWER": 'hitesh'}, {"LOWER": "vijay", 'OP': '?'}, {"LOWER": "oswal", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['hitesh vijay oswal', 'vijay']}}],
 	        
 	            [{"LOWER": 'divya'}, {"LOWER": "ravindran", 'OP': '?'}],
 	            [{'LOWER': {"IN": ['divya ravindran', 'divya', 'ravindran']}}],
@@ -564,6 +573,60 @@ class Prefetch:
 
 	            [{"LOWER": 'patrick'},  {"LOWER": "okeeffe", 'OP': '?'}],
 	            [{'LOWER': {"IN": ['patrick okeeffe', 'okeeffe']}}],
+	            [{"LOWER": 'axel'},  {"LOWER": "kloth", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['axel kloth', 'kloth']}}],
+
+	            [{"LOWER": 'rohan'},  {"LOWER": "mamidwar", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['rohan mamidwar', 'mamidwar']}}],
+	            [{"LOWER": 'venkateshwara'},  {"LOWER": "chandrasekaran", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['venkateshwara chandrasekaran', 'chandrasekaran']}}],
+
+	            [{"LOWER": 'paras'},  {"LOWER": "jha", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['paras jha', 'jha']}}],
+
+	            [{"LOWER": 'amal'}, {"LOWER": "bommireddy", 'OP': '?'}],
+	            [{'LOWER': {"IN": ['amal bommireddy', 'bommireddy']}}],
+
+				[{"LOWER": 'raghu'}],
+				[{'LOWER': {"IN": ['raghu ram']}}],
+
+				[{"LOWER": 'arasch'},  {"LOWER": "lagies", 'OP': '?'}],
+				[{'LOWER': {"IN": ['arasch lagies', 'lagies']}}],
+
+				[{"LOWER": 'shyam'},  {"LOWER": "rekhawar", 'OP': '?'}],
+				[{'LOWER': {"IN": ['shyam rekhawar', 'rekhawar']}}],
+
+				[{"LOWER": 'krishnan'}, {"LOWER": "ramamurthy", 'OP': '?'}],
+				[{'LOWER': {"IN": ['krishnan ramamurthy', 'ramamurthy']}}],
+				[{"LOWER": 'namrata'},  {"LOWER": "suraneni", 'OP': '?'}],
+				[{'LOWER': {"IN": ['namrata suraneni', 'suraneni']}}],
+
+				[{"LOWER": 'abhishek'},  {"LOWER": "chevli", 'OP': '?'}],
+				[{'LOWER': {"IN": ['abhishek chevli', 'chevli']}}],
+
+
+				[{"LOWER": 'varun'},  {"LOWER": "ande", 'OP': '?'}],
+				[{'LOWER': {"IN": ['varun ande', 'ande']}}],
+
+				[{"LOWER": 'ayanava'}, {"LOWER": "chakraborty", 'OP': '?'}],
+				[{'LOWER': {"IN": ['ayanava chakraborty', 'chakraborty']}}],
+
+				[{"LOWER": 'pravin'}, {"LOWER": "thalasila", 'OP': '?'}],
+				[{'LOWER': {"IN": ['pravin thalasila', 'pravin']}}],
+
+				[{"LOWER": 'raviteja'},  {"LOWER": "godugu", 'OP': '?'}],
+				[{'LOWER': {"IN": ['raviteja godugu', 'godugu']}}],
+
+
+				[{'LOWER': {"IN": ['josel lorenzo', 'lorenzo']}}],
+				[{"LOWER": 'josel'},  {"LOWER": "lorenzo", 'OP': '?'}]
+
+
+
+
+
+
+
 
 
 	        ]
@@ -707,9 +770,11 @@ class Files(Prefetch):
 	def __init__(self, file_name):
 		super().__init__()
 		self.inistiatePatterns()
+		self.dateAgg = None
 		self.__user_interest_dict = {}
+		self.__mail_to_date = {}
 		with open(file_name, encoding="utf-8") as json_file:
-			print("reading sjonl file", file_name)
+			print("reading jsonl file", file_name)
 			self.__data = json_file.read()
 			self.__result = [json.loads(jline) for jline in self.__data.splitlines()]
 			json_file.close()
@@ -826,22 +891,23 @@ class Files(Prefetch):
 		f.close()
 		# print("Written to json file: ", file_name)
 	def user_interest(self, id_):
-	    self.__user_df = self.__interest_df[(self.__interest_df['fromEmailAddress '] == id_) | (self.__interest_df['toRecipients '].str.contains(id_)) | (self.__interest_df['ccRecipients '].str.contains(id_))]
-	    user_content = list(self.__user_df['entities'])
-	    user_content_ = sum(user_content, [])
-	    
-	    name = id_.split('@')[0]
-	    name = name.replace('.', ' ')
-	    name_list = [w.lower().rstrip() for w in name.split()]
-	    try:
-	        bad_name1 = name.split()[0].lower() + '.'+ name.split()[1].lower()
-	        bad_name2 = name.split()[0].lower()
-	    except Exception as e:
-	        bad_name2 = name.lower()
-	        bad_name1 = name.split()[0].lower()
-	    self.__user_content_ = [(w[0].lower().rstrip(), w[1].rstrip()) for w in user_content_ if not (w[0].lower().startswith(tuple(name_list)))]
-	    self.__user_counter = self.ent_item_extract3(self.__user_content_)
-	    self.__user_interest_dict[id_.rstrip()] = self.__user_counter
+		self.__user_df = self.__interest_df[(self.__interest_df['fromEmailAddress '] == id_) | (self.__interest_df['toRecipients '].str.contains(id_)) | (self.__interest_df['ccRecipients '].str.contains(id_))]
+		user_content = list(self.__user_df['entities'])
+		user_content_ = sum(user_content, [])
+		
+		self.__mail_to_date[id_] = self.__user_df['receivedDateTime '].apply(lambda x: parser.parse(x).strftime("%Y-%m-%d")).mode().loc[0]
+		name = id_.split('@')[0]
+		name = name.replace('.', ' ')
+		name_list = [w.lower().rstrip() for w in name.split()]
+		try:
+		    bad_name1 = name.split()[0].lower() + '.'+ name.split()[1].lower()
+		    bad_name2 = name.split()[0].lower()
+		except Exception as e:
+		    bad_name2 = name.lower()
+		    bad_name1 = name.split()[0].lower()
+		self.__user_content_ = [(w[0].lower().rstrip(), w[1].rstrip()) for w in user_content_ if not (w[0].lower().startswith(tuple(name_list)))]
+		self.__user_counter = self.ent_item_extract3(self.__user_content_)
+		self.__user_interest_dict[id_.rstrip()] = self.__user_counter
 
 	def summer(self, l2):
 		l3 = []
@@ -854,6 +920,32 @@ class Files(Prefetch):
 		return {"EMAIL" : list(set(mails))}
 	def replaces(self, df):
 		return df.replace(' (', '/')
+	def decayFunc1(self, df, freq):
+		pre = datetime.now().strftime("%Y-%m-%d")
+		pre = parser.parse(pre)
+		pa = parser.parse(df)
+		origin = pre - pd.DateOffset(days = 365)
+		diff = pre - pa
+		# print(diff.days)
+		if diff.days <=2:
+		    return math.ceil(freq * math.exp(math.log10(diff.days)*-0.01))
+		elif diff.days <= 7:
+		    return math.ceil(freq * math.exp(math.log10(diff.days)*-0.03))
+		elif diff.days <=21:
+		    return math.ceil(freq * math.exp(math.log10(diff.days)*-0.055))
+		elif diff.days <=31:
+		    return math.ceil(freq * math.exp(math.log10(diff.days)*-0.065))
+		elif diff.days <= 60:
+		    return math.ceil(freq * math.exp(math.log(diff.days)*-0.048))
+		elif diff.days <=183:
+		    return math.ceil(freq * math.exp(math.sqrt(diff.days)*-0.02))
+		elif diff.days <= 365:
+		    return math.ceil(freq * math.exp(math.sqrt(diff.days)*-0.04))
+		elif diff.days <= 365*2:
+		    return math.ceil(freq * math.exp(math.sqrt(diff.days)*-0.055))
+		else:
+		    return math.ceil(freq * math.exp(math.sqrt(diff.days)*-0.065))
+
 	def parser_db(self, user_interest_dict):
 		sk = []
 		value = []
@@ -874,6 +966,17 @@ class Files(Prefetch):
 		            
 		            frequency.append(ranked_dict[ranked_keys[val]])
 		return user_id, sk, value, frequency, category
+
+	def parse_decay_dict(self, user_interest_dict):
+		decay_frequency = []
+		for record in user_interest_dict:
+		    for key in user_interest_dict[record]:
+		        ranked_dict = dict(user_interest_dict[record][key].most_common())
+		        ranked_keys = list(ranked_dict.keys())
+		        ranked_rank = np.arange(len(ranked_dict))
+		        for val in range(len(ranked_keys)):
+		            decay_frequency.append(ranked_dict[ranked_keys[val]])
+		return decay_frequency
 
 	def nameToId(self, name):
 	    name = name.split("@")[0]
@@ -995,6 +1098,7 @@ class Files(Prefetch):
 	def get_param(self, file_id):
 		self.__res = self.jsonl_to_dict(self.__result[0])
 		self.__df = pd.DataFrame.from_dict(self.__res)
+		# self.dateAgg = self.__df['receivedDateTime '].apply(lambda x: parser.parse(x).strftime("%Y-%m-%d")).mode().item()
 
 		self.__df_copy = self.__df.copy()
 		self.__df_copy['body.content '] = self.__df_copy['body.content '].str.lower()
@@ -1009,7 +1113,7 @@ class Files(Prefetch):
 		self.__wrangle_df = self.data_wrangler(self.__df)
 		self.__wrangle_df = pd.DataFrame(self.__wrangle_df, columns=['content'])
 
-		self.__interest_df =  pd.concat([self.__df['fromEmailAddress '], self.__df['toRecipients '], self.__df['ccRecipients '], self.__wrangle_df], axis = 1)
+		self.__interest_df =  pd.concat([self.__df['fromEmailAddress '], self.__df['toRecipients '], self.__df['ccRecipients '], self.__df['receivedDateTime '], self.__wrangle_df], axis = 1)
 
 		self.__interest_df['content'] = self.__interest_df['content'].apply(self.cleanhtml)
 
@@ -1041,13 +1145,24 @@ class Files(Prefetch):
 		    if len(i)>3:
 		        self.user_interest(i)
 
+		self.__user_interest_dict_copy = copy.deepcopy(self.__user_interest_dict)
+
+		for i in self.__user_interest_dict_copy:
+			for j in self.__user_interest_dict_copy[i]:
+				for k in self.__user_interest_dict_copy[i][j]:
+					decay_freq = self.__user_interest_dict_copy[i][j][k]
+					self.__user_interest_dict_copy[i][j][k] = self.decayFunc1(self.__mail_to_date[i], decay_freq)
+
+
 		# self.__natest = self.__user_interest_dict
 		# self.__write_to_json("obj_user_interest.json", self.__natest)
 		# flag = 0
 		try:
 			self.__uid = self.__read_from_json("obj_user_interest.json")
 			print("Loaded uid.json")
-			flag = 1
+			self.__decay_uid = self.__read_from_json("obj_user_interest_decay.json")
+			print("Loaded decay_uid.json")
+			# flag = 1
 			# except Exception as file_error:
 			# 	print("Couldn't read file")
 			# 	if file_id == 0:
@@ -1062,6 +1177,10 @@ class Files(Prefetch):
 			for i in self.__uid:
 				for j in self.__uid[i]:
 					self.__uid[i][j] = Counter(self.__uid[i][j])
+
+			for i in self.__decay_uid:
+				for j in self.__decay_uid[i]:
+					self.__decay_uid[i][j] = Counter(self.__decay_uid[i][j])
 
 			# print("Changed the dict to Counter dict")
 			self.__scrap = []
@@ -1085,8 +1204,22 @@ class Files(Prefetch):
 			        elif j!= 'PEOPLE' and j in self.__user_interest_dict[i]:
 			            self.__uid[i][j] = self.__user_interest_dict[i][j] + self.__uid[i][j]
 
+			for i in self.__scrap:
+			    for j in self.__decay_uid[i]:
+			        if j == "PEOPLE" and j in self.__user_interest_dict_copy[i]:
+			            puid = self.substringReplace(list(self.__decay_uid[i][j].keys()) + list(self.__user_interest_dict_copy[i][j].keys()))
+			            tuid = self.__decay_uid[i][j]
+			            vuid = self.__user_interest_dict_copy[i][j]
+			            self.__decay_uid[i][j] = Counter(dict(zip(puid[:len(tuid)], list(tuid.values()))))
+			            self.__user_interest_dict_copy[i][j] = Counter(dict(zip(puid[len(tuid):], list(vuid.values()))))
+			            self.__decay_uid[i][j] = self.__user_interest_dict_copy[i][j] + self.__decay_uid[i][j]
+			        elif j!= 'PEOPLE' and j in self.__user_interest_dict_copy[i]:
+			            self.__decay_uid[i][j] = self.__user_interest_dict_copy[i][j] + self.__decay_uid[i][j]
+
 			self.__natest = dict(list(self.__user_interest_dict.items()) + list(self.__uid.items()))
+			self.__decay_natest = dict(list(self.__user_interest_dict_copy.items()) + list(self.__decay_uid.items()))
 			self.__write_to_json("obj_user_interest.json", self.__natest)
+			self.__write_to_json("obj_user_interest_decay.json", self.__decay_natest)
 			self.__write_to_json("backup_obj_user_interest.json", self.__natest)
 
 
@@ -1094,18 +1227,22 @@ class Files(Prefetch):
 			print('==========EXCEPT===========')
 			# print(self.__user_interest_dict['amit.patel@axiado.com'])
 			# print('==================================')
+			self.__decay_natest = self.__user_interest_dict_copy
 
 			self.__natest = self.__user_interest_dict
 			self.__write_to_json("obj_user_interest.json", self.__natest)
+			self.__write_to_json("obj_user_interest_decay.json", self.__decay_natest)
 
 
 		user_id, sk, value, frequency, category = self.parser_db(self.__natest)
+		decay_frequency = self.parse_decay_dict(self.__decay_natest)
 
 		final_df = pd.DataFrame(user_id, columns=['email_id'])
 		final_df['sk'] = sk
 		final_df['value'] = value
 		final_df['category'] = category
 		final_df['frequency'] = frequency
+		final_df['decay_frequency'] = decay_frequency
 
 		final_df['sk'] = final_df['sk'].apply(self.replaces)
 		final_df['value'] = final_df['value'].apply(self.replaces)
@@ -1157,24 +1294,34 @@ class Files(Prefetch):
 		final_au_int_df['nameToId'] = fna['alt_value']
 		final_au_int_df['entityName'] = fna['alt_avatar']
 		final_au_int_df['entityName'].fillna(final_au_int_df['value'].apply(lambda x: x.title()), inplace = True)
+		final_au_int_df['decay_frequency'] = final_df['decay_frequency']
 		final_au_int_df['entityLabel'] = fna['entityLabel']
 		final_au_int_df['category'] = final_au_int_df['category'].replace('COMPONENTS', 'TOPICS')
 		final_au_int_df['category'] = final_au_int_df['category'].replace('EMAIL', 'PEOPLE')
 		final_au_int_df['nameToId'] = final_au_int_df['nameToId'].apply(self.add_USER_tag)
+		final_au_int_df.to_csv('obj_fake_eng_df.csv', index=False)
+		final_au_int_df.to_json('obj_fake_eng_df.json', orient='records')
 
 		df_cumulative = final_au_int_df.copy()
 		print(df_cumulative.columns)
 		df_cumulative['userName'] = df_cumulative['userName'].apply(lambda x: x.title() if pd.isnull(x)==False else None)
 		df_cumulative = df_cumulative[(df_cumulative['category'] == 'TOPICS') | (df_cumulative['category'] == 'PEOPLE') | (df_cumulative['category'] == 'TEAMS') | (df_cumulative['category'] == 'PROG_SCRIPT_LANG')]
-		frequency_lookup = self.functions.groupbySum(df_cumulative, 'entityName')
+		frequency_lookup, decay_lookup = self.functions.groupbySum(df_cumulative, 'entityName')
 		orphan_lookup = self.functions.groupbySum(df_cumulative, 'nameToId')
 		df_cumulative['self_freq'] = df_cumulative[df_cumulative['category'] == 'PEOPLE']['userName'].apply(lambda x: frequency_lookup[x] if pd.isnull(x)==False else None)
+		df_cumulative['self_decay_freq'] = df_cumulative[df_cumulative['category'] == 'PEOPLE']['userName'].apply(lambda x: decay_lookup[x] if pd.isnull(x)==False else None)
 		df_cumulative['freq_lookup'] = df_cumulative['entityName'].apply(lambda x: frequency_lookup[x])
+		# df_cumulative['decay_lookup'] = df_cumulative['entityName'].apply(lambda x: decay_lookup[x])
 		df_cumulative['lookup_freq'] = df_cumulative['entityName'].apply(lambda x: frequency_lookup[x])
+		df_cumulative['lookup_decay_freq'] = df_cumulative['entityName'].apply(lambda x: decay_lookup[x])
 		df_cumulative['self_freq'].fillna(df_cumulative['frequency'], inplace = True)
+		df_cumulative['self_decay_freq'].fillna(df_cumulative['decay_frequency'], inplace = True)
 		df_cumulative['total_freq'] = df_cumulative['lookup_freq'] + df_cumulative['self_freq'].fillna(0)
+		df_cumulative['total_decay_freq'] = df_cumulative['lookup_decay_freq'] + df_cumulative['self_decay_freq'].fillna(0)
 		df_cumulative['total_freq'] = df_cumulative['total_freq'].apply(lambda x: math.sqrt(x))
 		df_cumulative['self_freq'] = df_cumulative['frequency'].apply(lambda x: math.log(x))
+		df_cumulative['total_decay_freq'] = df_cumulative['total_decay_freq'].apply(lambda x: math.sqrt(x))
+		df_cumulative['self_decay_freq'] = df_cumulative['decay_frequency'].apply(lambda x: math.log(x))
 		# df_cumulative['total_freq'] = df_cumulative['self_freq'] + df_cumulative['self_freq'].fillna(0)
 		# df_cumulative[['self_normalized', 'total_normalized']] = pfs.normalize(df_cumulative[['frequency', 'total_freq']])
 		df_ = df_cumulative.copy()
@@ -1182,14 +1329,19 @@ class Files(Prefetch):
 		# df_[['sc_frequency', 't_frequency']] = self.functions.normalize(df_[['self_freq', 'total_freq']])
 		df_['sc_frequency'] = self.scaler_function(df_['self_freq'], 0)
 		df_['t_frequency'] = self.scaler_function(df_['total_freq'], 0)
+		df_['scd_frequency'] = self.scaler_function(df_['self_decay_freq'], 0)
+		df_['td_frequency'] = self.scaler_function(df_['total_decay_freq'], 0)
 		df_['weight'] = 1.2* df_['sc_frequency'] + df_['t_frequency']
+		df_['d_weight'] = 1.2* df_['scd_frequency'] + df_['td_frequency']
 		# df_['weight'] = self.functions.scaler.fit_transform(df_[['weight']])
 		df_['weight'] = self.scaler_function(df_[['weight']], 1)
 		df_['weight'] = df_['weight'].apply(lambda x: round(x, 3))
+		df_['d_weight'] = self.scaler_function(df_[['d_weight']], 1)
+		df_['d_weight'] = df_['d_weight'].apply(lambda x: round(x, 3))
 		# print(df_['sc_frequency'].head())
 		# print("=========================")
 		# print(df_['t_frequency'].head())
-		df_.drop(columns = ['self_freq', 'lookup_freq', 'total_freq', 'sc_frequency', 't_frequency'], inplace = True)
+		df_.drop(columns = ['sc_frequency', 't_frequency', 'td_frequency', 'scd_frequency', 'freq_lookup', 'self_freq', 'self_decay_freq', 'total_freq', 'total_decay_freq'], inplace = True)
 		df_.to_csv('testInterest.csv', index= False)
 		df_.to_json('testInterest.json', orient = 'records')
 
@@ -1205,7 +1357,7 @@ class Files(Prefetch):
 if __name__ == "__main__":
 	obj = Prefetch()
 	obj.inistiatePatterns()
-	doc = ["I had a meeting with gopi sirineni from axiado edgeiq who is working on neural-network processor and secure vault and he wanted us to focus on cyber attack and also fix some bugs on sdk.  manojpraveen445@gmail.com That would be salome work edge iq input", "Hello gopi, how are you?"]
+	doc = ["I had a meeting with gopi sirineni and hitesh from axiado edgeiq who is working on neural-network processor and secure vault and he wanted us to focus on cyber attack and also fix some bugs on sdk.  manojpraveen445@gmail.com That would be salome work edge iq input", "Hello gopi, how are you?"]
 	# print(obj.mailToName('deepansh.agrawal@axiado.com'))
 	# for i in obj.nlp.pipe(doc):
 	# 	print(obj.parse_entities(i))
