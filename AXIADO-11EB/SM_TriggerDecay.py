@@ -1290,10 +1290,10 @@ class Files(Prefetch):
 		# print("=========================")
 		# print(df_['t_frequency'].head())
 		df_.drop(columns = ['sc_frequency', 't_frequency', 'td_frequency', 'scd_frequency', 'freq_lookup', 'self_freq', 'self_decay_freq', 'total_freq', 'total_decay_freq'], inplace = True)
-		test_interest_json = df_.to_dict('records')
-		s3_client.put_object(Body=json.dumps(test_interest_json), Bucket = 'augmentor-customer-data', Key = 'AXIADO-INTERESTS/testInterest.json')
+		test_interest_json = df_.to_json(orient = 'records', lines = True)
+		s3_client.put_object(Body = test_interest_json, Bucket = 'augmentor-customer-data', Key = 'AXIADO-INTERESTS/testInterest.jsonl')
 
-		res_df = final_au_int_df.to_dict('records')
+		res_df = final_au_int_df.to_json(orient = 'records', lines = True)
 
 
 		csv_buf = StringIO()
@@ -1301,7 +1301,7 @@ class Files(Prefetch):
 		csv_buf.seek(0)
 		s3_client.put_object(Bucket='augmentor-customer-data', Body=csv_buf.getvalue(), Key='AXIADO-INTERESTS/final_au_int_df_update.csv')
 
-		s3_client.put_object(Body=json.dumps(res_df), Bucket = 'augmentor-customer-data', Key = 'AXIADO-INTERESTS/final_au_int_df_update.json')
+		s3_client.put_object(Body = res_df, Bucket = 'augmentor-customer-data', Key = 'AXIADO-INTERESTS/final_au_int_df_update.jsonl')
 		print("written to final_au_int_df_update.json and csv")
 
 	def displayParams(self):
