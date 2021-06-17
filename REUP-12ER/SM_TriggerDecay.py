@@ -1206,6 +1206,28 @@ class Files(Prefetch):
 
 		res_df = final_au_int_df.to_json(orient = 'records', lines = True)
 
+		resultLength = len(df_)
+		print("length: ", resultLength)
+		df_slice_first = 0
+		df_slice_second = 2
+		cnt = 0
+		if resultLength < 2000:
+			outputInterestsKey = 'REUP-INTERESTS/outDir/testInterest_0.jsonl' 
+			res_df_ = df_[df_slice_first*1000:df_slice_second*1000].to_json(orient = 'records', lines = True)
+			s3_client.put_object(Body= res_df_, Bucket = 'augmentor-customer-data', Key = outputInterestsKey)
+		else:
+		    for outputInteresIndex, outputInterestsData in enumerate(df_[df_slice_first*1000:df_slice_second*1000]):
+		        if resultLength/1000 < df_slice_first:
+		            break
+		            
+		        else:
+		        	outputInterestsKey = 'REUP-INTERESTS/outDir/testInterest_' + outputInteresIndex + '.jsonl'
+		        	res_df_ = df_[df_slice_first*1000:df_slice_second*1000].to_json(orient = 'records', lines = True)
+		        	s3_client.put_object(Body= res_df_, Bucket = 'augmentor-customer-data', Key = outputInterestsKey)
+		        	df_slice_first = df_slice_second
+		        	df_slice_second = df_slice_second+2
+		        	time.sleep(0.5)
+
 		csv_buf = StringIO()
 		final_au_int_df.to_csv(csv_buf, header=True, index=False)
 		csv_buf.seek(0)
